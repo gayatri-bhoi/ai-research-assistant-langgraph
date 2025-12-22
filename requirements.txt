@@ -1,0 +1,30 @@
+langgraph
+langchain
+langchain-groq
+tavily-python
+python-dotenv
+fastapi
+uvicorn
+streamlit
+requests
+pydantic
+
+
+
+# Core Framework
+streamlit==1.31.0
+
+# LangChain & LangGraph
+langgraph==0.0.55
+langchain==0.1.16
+langchain-groq==0.1.3
+langchain-core==0.1.45
+langchain-community==0.0.38
+
+# AI & Search
+tavily-python==0.3.3
+
+# Utilities
+python-dotenv==1.0.1
+requests==2.31.0
+pydantic==2.6.4
