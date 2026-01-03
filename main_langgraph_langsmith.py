@@ -2,9 +2,10 @@ import streamlit as st
 import os
 from typing import TypedDict, Annotated
 import operator
-from datetime import datetime
 from dotenv import load_dotenv
 import time
+import json
+from datetime import datetime
 
 # LangGraph & LangChain imports
 from langgraph.graph import StateGraph, END
@@ -14,245 +15,30 @@ from tavily import TavilyClient
 # Load environment variables
 load_dotenv()
 
-# --- PAGE CONFIGURATION ---
+# --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
     page_title="AI Research Assistant",
-    page_icon="🔬",
+    page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS ---
+# --- 2. INITIALIZE SESSION STATE ---
+if 'search_history' not in st.session_state:
+    st.session_state.search_history = []
+
+# --- 3. CUSTOM CSS FOR PROFESSIONAL ANIMATIONS ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
-    * {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    .main {
-        background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
-        padding: 0;
-    }
-    
-    .stApp {
-        background: transparent;
-    }
-    
-    /* Hero Section */
-    .hero-section {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 3rem 2rem;
-        border-radius: 20px;
-        text-align: center;
-        margin-bottom: 2rem;
-        box-shadow: 0 20px 60px rgba(102, 126, 234, 0.4);
-        animation: fadeIn 0.8s ease-out;
-    }
-    
-    .hero-section h1 {
-        color: white;
-        font-size: 3rem;
-        margin: 0;
-        font-weight: 700;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-    }
-    
-    .hero-section p {
-        color: rgba(255, 255, 255, 0.95);
-        font-size: 1.2rem;
-        margin-top: 1rem;
-        font-weight: 500;
-    }
-    
-    /* Glass Card */
-    .glass-card {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(10px);
-        border-radius: 20px;
-        padding: 2rem;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        margin-bottom: 1.5rem;
-        transition: transform 0.3s ease;
-    }
-    
-    .glass-card:hover {
-        transform: translateY(-5px);
-    }
-    
-    /* Metric Cards */
-    .metric-container {
-        display: flex;
-        gap: 1rem;
-        margin: 2rem 0;
-    }
-    
-    .metric-box {
-        flex: 1;
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
-        backdrop-filter: blur(10px);
-        border-radius: 15px;
-        padding: 1.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        text-align: center;
-        transition: all 0.3s ease;
-    }
-    
-    .metric-box:hover {
-        transform: scale(1.05);
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-    }
-    
-    .metric-value {
-        font-size: 2.5rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 0.5rem;
-    }
-    
-    .metric-label {
-        color: rgba(255, 255, 255, 0.8);
-        font-size: 0.95rem;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    
-    /* Step Timeline */
-    .step-timeline {
-        position: relative;
-        padding: 2rem 0;
-    }
-    
-    .step-item {
-        display: flex;
-        align-items: center;
-        margin: 1rem 0;
-        animation: slideInLeft 0.5s ease-out;
-    }
-    
-    .step-icon {
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        margin-right: 1rem;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    }
-    
-    .step-analyze { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .step-search { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-    .step-synthesize { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-    .step-direct { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
-    
-    .step-content {
-        flex: 1;
-        background: rgba(255, 255, 255, 0.05);
-        padding: 1rem 1.5rem;
-        border-radius: 10px;
-        border-left: 3px solid #667eea;
-        color: white;
-        font-weight: 500;
-    }
-    
-    /* Answer Box */
-    .answer-box {
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-        backdrop-filter: blur(10px);
-        border-radius: 20px;
-        padding: 2.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 15px 45px rgba(0, 0, 0, 0.3);
-        color: white;
-        line-height: 1.8;
-        font-size: 1.05rem;
-    }
-    
-    /* Source Cards */
-    .source-card {
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-        backdrop-filter: blur(10px);
-        border-radius: 15px;
-        padding: 1.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        margin-bottom: 1rem;
-        transition: all 0.3s ease;
-    }
-    
-    .source-card:hover {
-        transform: translateX(10px);
-        border-color: #667eea;
-    }
-    
-    .source-title {
-        color: #667eea;
-        font-size: 1.1rem;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-    }
-    
-    .source-link {
-        color: #4facfe;
-        text-decoration: none;
-        font-weight: 500;
-        transition: color 0.3s ease;
-    }
-    
-    .source-link:hover {
-        color: #00f2fe;
-    }
-    
-    /* Buttons */
-    .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 0.75rem 2rem;
-        font-size: 1.1rem;
-        font-weight: 600;
-        border-radius: 12px;
-        box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        transition: all 0.3s ease;
-        width: 100%;
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 30px rgba(102, 126, 234, 0.6);
-    }
-    
-    /* Input Fields */
-    .stTextInput > div > div > input {
-        background: rgba(255, 255, 255, 0.08);
-        border: 2px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 1rem;
-        color: white;
-        font-size: 1rem;
-        transition: all 0.3s ease;
-    }
-    
-    .stTextInput > div > div > input:focus {
-        border-color: #667eea;
-        box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
-    }
-    
-    /* Animations */
+    /* Main container animations */
     @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-20px); }
+        from { opacity: 0; transform: translateY(20px); }
         to { opacity: 1; transform: translateY(0); }
     }
     
-    @keyframes slideInLeft {
-        from { opacity: 0; transform: translateX(-30px); }
-        to { opacity: 1; transform: translateX(0); }
+    @keyframes slideIn {
+        from { transform: translateX(-100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
     }
     
     @keyframes pulse {
@@ -260,220 +46,437 @@ st.markdown("""
         50% { transform: scale(1.05); }
     }
     
-    /* Section Headers */
-    .section-header {
+    @keyframes shimmer {
+        0% { background-position: -1000px 0; }
+        100% { background-position: 1000px 0; }
+    }
+    
+    /* Header styling */
+    .main-header {
+        animation: fadeIn 1s ease-out;
+        text-align: center;
+        padding: 2rem 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    }
+    
+    .main-header h1 {
         color: white;
-        font-size: 1.8rem;
-        font-weight: 700;
-        margin: 2rem 0 1rem 0;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
+        font-size: 3rem;
+        margin: 0;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
     }
     
-    /* Sidebar Styling */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    .main-header p {
+        color: rgba(255,255,255,0.9);
+        font-size: 1.2rem;
+        margin-top: 0.5rem;
     }
     
-    [data-testid="stSidebar"] .stMarkdown {
-        color: white;
-    }
-    
-    /* Loading Spinner */
-    .stSpinner > div {
-        border-top-color: #667eea !important;
-    }
-    
-    /* Expander */
-    .streamlit-expanderHeader {
-        background: rgba(255, 255, 255, 0.05);
+    /* Sidebar styling */
+    .sidebar-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1rem;
         border-radius: 10px;
+        color: white;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    
+    .history-item {
+        background: #f8f9fa;
+        padding: 0.8rem;
+        border-radius: 8px;
+        margin: 0.5rem 0;
+        border-left: 3px solid #667eea;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .history-item:hover {
+        background: #e9ecef;
+        transform: translateX(5px);
+    }
+    
+    .history-time {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+    
+    /* Input container */
+    .input-container {
+        animation: fadeIn 1.2s ease-out;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2.5rem;
+        border-radius: 15px;
+        box-shadow: 0 8px 30px rgba(102, 126, 234, 0.3);
+        margin: 2rem 0;
+    }
+    
+    /* Enhanced search input */
+    .stTextInput > div > div > input {
+        background: white !important;
+        border: 2px solid rgba(255,255,255,0.3) !important;
+        border-radius: 12px !important;
+        padding: 1rem 1.5rem !important;
+        font-size: 1.1rem !important;
+        color: #2c3e50 !important;
+        caret-color: #667eea !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stTextInput > div > div > input:focus {
+        border: 2px solid white !important;
+        box-shadow: 0 0 20px rgba(255,255,255,0.5) !important;
+        transform: scale(1.02);
+        caret-color: #667eea !important;
+    }
+    
+    .stTextInput > div > div > input::placeholder {
+        color: #95a5a6 !important;
+    }
+    
+    .stTextInput > label {
         color: white !important;
+        font-size: 1.2rem !important;
+        font-weight: 600 !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    /* Step cards */
+    .step-card {
+        animation: slideIn 0.5s ease-out;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 1rem 1.5rem;
+        border-radius: 10px;
+        margin: 0.5rem 0;
+        border-left: 4px solid #667eea;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        transition: transform 0.3s ease;
+        color: #2c3e50;
+        font-weight: 500;
+        font-size: 1.05rem;
+    }
+    
+    .step-card:hover {
+        transform: translateX(10px);
+    }
+    
+    /* Pipeline container */
+    .pipeline-container {
+        background: transparent;
+        padding: 1rem 0;
+        margin: 1rem 0;
+    }
+    
+    .pipeline-header {
+        color: #2c3e50;
         font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    
+    /* Answer container */
+    .answer-container {
+        animation: fadeIn 1.5s ease-out;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        border: 2px solid #667eea;
+        margin-top: 2rem;
+    }
+    
+    .answer-container h3 {
+        color: #2c3e50;
+    }
+    
+    .answer-container p {
+        color: #34495e;
+        line-height: 1.8;
+    }
+    
+    /* Loading animation */
+    .loading-bar {
+        width: 100%;
+        height: 4px;
+        background: linear-gradient(90deg, #667eea, #764ba2, #667eea);
+        background-size: 200% 100%;
+        animation: shimmer 2s infinite;
+        border-radius: 2px;
+        margin: 1rem 0;
+    }
+    
+    /* Info cards */
+    .info-card {
+        background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin: 1rem 0;
+        border-left: 4px solid #667eea;
+    }
+    
+    /* Button styling */
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 2rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        animation: pulse 1s infinite;
+    }
+    
+    /* Status indicators */
+    .status-working {
+        display: inline-block;
+        animation: pulse 1.5s infinite;
+    }
+    
+    /* Emoji animations */
+    .emoji-bounce {
+        display: inline-block;
+        animation: bounce 1s infinite;
+    }
+    
+    @keyframes bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- HEADER ---
+# --- 4. SIDEBAR CONFIGURATION ---
+with st.sidebar:
+    st.markdown("""
+    <div class="sidebar-header">
+        <h2>⚙️ Controls</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("### 🎛️ Actions")
+    
+    # Clear cache button
+    if st.button("🗑️ Clear Cache", use_container_width=True):
+        st.cache_resource.clear()
+        st.success("✅ Cache cleared successfully!")
+        time.sleep(1)
+        st.rerun()
+    
+    # Delete history button
+    if st.button("📝 Delete History", use_container_width=True):
+        st.session_state.search_history = []
+        st.success("✅ History deleted successfully!")
+        time.sleep(1)
+        st.rerun()
+    
+    st.markdown("---")
+    
+    # Search History Section
+    st.markdown("### 📚 Search History")
+    
+    if st.session_state.search_history:
+        st.markdown(f"**Total Searches:** {len(st.session_state.search_history)}")
+        
+        # Display history items
+        for idx, item in enumerate(reversed(st.session_state.search_history[-10:])):  # Show last 10
+            with st.expander(f"🔍 {item['query'][:40]}...", expanded=False):
+                st.markdown(f"**Time:** {item['timestamp']}")
+                st.markdown(f"**Method:** {item['method']}")
+                if st.button(f"Rerun", key=f"rerun_{idx}"):
+                    st.session_state.selected_query = item['query']
+                    st.rerun()
+    else:
+        st.info("No search history yet. Start researching!")
+    
+    st.markdown("---")
+    
+    # Statistics
+    st.markdown("### 📊 Statistics")
+    if st.session_state.search_history:
+        search_count = sum(1 for item in st.session_state.search_history if item['method'] == 'Web Search')
+        direct_count = len(st.session_state.search_history) - search_count
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("🌐 Web Searches", search_count)
+        with col2:
+            st.metric("💡 Direct Answers", direct_count)
+    
+    st.markdown("---")
+    
+    # About Section
+    with st.expander("ℹ️ About"):
+        st.markdown("""
+        **AI Research Assistant v2.0**
+        
+        Features:
+        - Multi-agent architecture
+        - Real-time web search
+        - LLM-powered synthesis
+        - Search history tracking
+        - Cache management
+        
+        Built with LangGraph, Groq & Tavily
+        """)
+
+# --- 5. HEADER ---
 st.markdown("""
-<div class="hero-section">
-    <h1>🔬 AI Research Assistant</h1>
-    <p>Intelligent Multi-Agent System • Powered by LangGraph & Llama 3.3</p>
+<div class="main-header">
+    <h1>🔍 AI Research Assistant</h1>
+    <p>Powered by LangGraph & Tavily | Multi-Agent Intelligence</p>
 </div>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR ---
-with st.sidebar:
-    st.markdown("### ⚙️ Configuration")
+# --- 6. API KEY CONFIGURATION ---
+def load_api_keys():
+    """Load API keys from environment variables"""
+    groq_key = os.getenv("GROQ_API_KEY")
+    tavily_key = os.getenv("TAVILY_API_KEY")
+    langchain_key = os.getenv("LANGCHAIN_API_KEY")
     
-    # Load API keys from .env (hidden)
-    groq_key = os.getenv("GROQ_API_KEY", "")
-    tavily_key = os.getenv("TAVILY_API_KEY", "")
+    # Strip whitespace and validate
+    groq_key = groq_key.strip() if groq_key else None
+    tavily_key = tavily_key.strip() if tavily_key else None
+    langchain_key = langchain_key.strip() if langchain_key else None
     
-    # Show status only, not the keys
-    st.markdown("### 🔐 API Keys Status")
-    
-    if groq_key:
-        st.success("✅ Groq API Key: Loaded from .env")
-    else:
-        st.error("❌ Groq API Key: Not found")
-    
-    if tavily_key:
-        st.success("✅ Tavily API Key: Loaded from .env")
-    else:
-        st.error("❌ Tavily API Key: Not found")
-    
-    st.info("💡 Add your API keys to the `.env` file in your project root")
-    
-    st.divider()
-    
-    # Model Configuration
-    st.markdown("### 🤖 Model Settings")
-    
-    model = st.selectbox(
-        "Select Model",
-        ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "mixtral-8x7b-32768"],
-        help="Choose the language model"
-    )
-    
-    temperature = st.slider(
-        "Temperature",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.3,
-        step=0.1,
-        help="Creativity level: Lower = Focused, Higher = Creative"
-    )
-    
-    max_results = st.slider(
-        "Search Results",
-        min_value=1,
-        max_value=10,
-        value=5,
-        help="Number of sources to retrieve"
-    )
-    
-    st.divider()
-    
-    # Status
-    if groq_key and tavily_key:
-        st.success("✅ Ready to Research")
-    else:
-        st.error("❌ API Keys Required")
-        st.info("💡 Add keys to .env file or enter above")
-    
-    st.divider()
-    
-    st.markdown("### 📚 Features")
-    st.markdown("""
-    - 🧠 **Smart Routing**: Auto-decides between knowledge & search
-    - 🌐 **Web Search**: Real-time information via Tavily
-    - 🔄 **Multi-Step**: LangGraph orchestration
-    - ⚡ **Fast**: Optimized Llama 3.3 inference
-    """)
-    
-    st.divider()
-    
-    st.markdown("### 🎯 How It Works")
-    st.markdown("""
-    1. **Analyze**: Determines if search is needed
-    2. **Search**: Queries web if required
-    3. **Synthesize**: Combines sources
-    4. **Answer**: Delivers comprehensive response
-    """)
+    return groq_key, tavily_key, langchain_key
 
-# --- STATE DEFINITION ---
+def verify_groq_key(api_key):
+    """Test if Groq API key is valid"""
+    try:
+        test_llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=api_key, timeout=10)
+        test_llm.invoke("test")
+        return True
+    except Exception as e:
+        return False
+
+def verify_tavily_key(api_key):
+    """Test if Tavily API key is valid"""
+    try:
+        test_client = TavilyClient(api_key=api_key)
+        test_client.search(query="test", max_results=1)
+        return True
+    except Exception as e:
+        return False
+
+groq_key, tavily_key, langchain_key = load_api_keys()
+
+# Verify API keys
+groq_valid = False
+tavily_valid = False
+
+if groq_key:
+    with st.spinner("Verifying Groq API key..."):
+        groq_valid = verify_groq_key(groq_key)
+
+if tavily_key:
+    with st.spinner("Verifying Tavily API key..."):
+        tavily_valid = verify_tavily_key(tavily_key)
+
+# Display configuration status
+col1, col2, col3 = st.columns(3)
+with col1:
+    status = "✅ Valid & Connected" if groq_valid else ("⚠️ Invalid Key" if groq_key else "❌ Key Missing")
+    color = "#28a745" if groq_valid else ("#ffc107" if groq_key else "#dc3545")
+    st.markdown(f"""
+    <div class="info-card" style="border-left-color: {color}">
+        <h4>🤖 LLM Status</h4>
+        <p>{status}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+with col2:
+    status = "✅ Valid & Connected" if tavily_valid else ("⚠️ Invalid Key" if tavily_key else "❌ Key Missing")
+    color = "#28a745" if tavily_valid else ("#ffc107" if tavily_key else "#dc3545")
+    st.markdown(f"""
+    <div class="info-card" style="border-left-color: {color}">
+        <h4>🌐 Search Status</h4>
+        <p>{status}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+with col3:
+    status = "✅ Active" if langchain_key else "⚠️ Optional"
+    color = "#28a745" if langchain_key else "#6c757d"
+    st.markdown(f"""
+    <div class="info-card" style="border-left-color: {color}">
+        <h4>📊 Tracing Status</h4>
+        <p>{status}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Show detailed error messages
+if not groq_key or not tavily_key:
+    st.error("⚠️ **Missing API Keys!** Please configure your .env file")
+    st.code("""
+GROQ_API_KEY=your_actual_groq_key_here
+TAVILY_API_KEY=your_actual_tavily_key_here
+LANGCHAIN_API_KEY=your_langchain_key_here (optional)
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+LANGCHAIN_PROJECT=research-assistance-project
+    """)
+    st.info("📌 Get your API keys from:\n- Groq: https://console.groq.com/keys\n- Tavily: https://app.tavily.com/")
+    st.stop()
+
+if groq_key and not groq_valid:
+    st.error("❌ **Invalid Groq API Key!** Please check your GROQ_API_KEY in .env file")
+    st.info("🔑 Get a valid API key from: https://console.groq.com/keys")
+    st.stop()
+
+if tavily_key and not tavily_valid:
+    st.error("❌ **Invalid Tavily API Key!** Please check your TAVILY_API_KEY in .env file")
+    st.info("🔑 Get a valid API key from: https://app.tavily.com/")
+    st.stop()
+
+# --- 7. CORE LOGIC (Nodes & Graph) ---
 class ResearchState(TypedDict):
     query: str
     needs_search: bool
     search_results: str
     final_answer: str
     steps: Annotated[list[str], operator.add]
-    sources: list[dict]
 
-# --- GRAPH BUILDER ---
-def get_graph(groq_api_key, tavily_api_key, model_name, temp, max_res):
-    llm = ChatGroq(model=model_name, temperature=temp, groq_api_key=groq_api_key)
-    tavily_client = TavilyClient(api_key=tavily_api_key)
+@st.cache_resource
+def get_graph(_groq_api_key, _tavily_api_key):
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.3, groq_api_key=_groq_api_key)
+    tavily_client = TavilyClient(api_key=_tavily_api_key)
 
     def analyze_query(state: ResearchState):
-        prompt = f"""Analyze whether this query requires real-time web search or can be answered from existing knowledge.
-
-Query: "{state['query']}"
-
-Consider:
-- Does it ask about recent events, current news, or today's data?
-- Does it need real-time information?
-- Could facts have changed since training cutoff?
-
-Respond with ONLY 'SEARCH' or 'DIRECT'."""
-        
+        prompt = f"Analyze if this query needs web search or direct answer: {state['query']}\nRespond 'SEARCH' or 'DIRECT'."
         response = llm.invoke(prompt)
         needs_search = "SEARCH" in response.content.upper()
-        
-        return {
-            "needs_search": needs_search,
-            "steps": [f"🧠|analyze|{'Web search required for current data' if needs_search else 'Answering from knowledge base'}"],
-            "sources": []
-        }
+        return {"needs_search": needs_search, "steps": [f"🧠 Decision: {'Web Search Required' if needs_search else 'Direct Knowledge Available'}"]}
 
     def search_web(state: ResearchState):
-        search_response = tavily_client.search(query=state["query"], max_results=max_res)
-        
-        results = "\n\n".join([
-            f"Source {i+1}:\nTitle: {r.get('title', 'Untitled')}\nURL: {r['url']}\nContent: {r['content'][:500]}..."
-            for i, r in enumerate(search_response['results'])
-        ])
-        
-        sources = [
-            {"url": r['url'], "title": r.get('title', 'Untitled Source')} 
-            for r in search_response['results']
-        ]
-        
-        return {
-            "search_results": results,
-            "steps": [f"🌐|search|Found {len(search_response['results'])} relevant sources"],
-            "sources": sources
-        }
+        search_response = tavily_client.search(query=state["query"], max_results=3)
+        results = "\n\n".join([f"Source: {r['url']}\n{r['content']}" for r in search_response['results']])
+        return {"search_results": results, "steps": [f"🌐 Retrieved {len(search_response['results'])} sources from Tavily"]}
 
     def synthesize_answer(state: ResearchState):
-        prompt = f"""Based on these web search results, provide a comprehensive and well-structured answer.
-
-Search Results:
-{state['search_results']}
-
-Original Query: {state['query']}
-
-Instructions:
-- Synthesize information from multiple sources
-- Provide specific facts and data
-- Be comprehensive yet clear
-- Cite key findings naturally"""
-        
+        prompt = f"Using these results: {state['search_results']}\n\nAnswer the query: {state['query']}"
         response = llm.invoke(prompt)
-        return {
-            "final_answer": response.content,
-            "steps": ["✍️|synthesize|Created comprehensive answer from sources"]
-        }
+        return {"final_answer": response.content, "steps": ["✍️ Synthesized comprehensive research report"]}
 
     def direct_answer(state: ResearchState):
-        prompt = f"""Provide a detailed, accurate, and well-structured answer to this query:
-
-{state['query']}
-
-Be comprehensive and informative."""
-        
-        response = llm.invoke(prompt)
-        return {
-            "final_answer": response.content,
-            "steps": ["💡|direct|Generated answer from knowledge base"]
-        }
+        response = llm.invoke(f"Answer concisely: {state['query']}")
+        return {"final_answer": response.content, "steps": ["💡 Generated answer from internal knowledge base"]}
 
     def route_query(state: ResearchState):
         return "search" if state["needs_search"] else "direct"
 
-    # Build Workflow Graph
+    # Build Graph
     workflow = StateGraph(ResearchState)
     workflow.add_node("analyze", analyze_query)
     workflow.add_node("search", search_web)
@@ -488,137 +491,95 @@ Be comprehensive and informative."""
     
     return workflow.compile()
 
-# --- MAIN INTERFACE ---
-st.markdown('<div class="section-header">🔍 Research Query</div>', unsafe_allow_html=True)
-
+# --- 8. USER INTERFACE ---
 query = st.text_input(
-    "What would you like to research?",
-    placeholder="e.g., What are the latest developments in quantum computing?",
-    label_visibility="collapsed",
-    key="main_query"
+    "🔎 What would you like to research?",
+    value=st.session_state.get('selected_query', ''),
+    placeholder="e.g., What are the latest AI breakthroughs in 2024?",
+    key="search_query"
 )
 
-# Example Queries
-with st.expander("💡 Try These Example Queries"):
-    col1, col2, col3 = st.columns(3)
-    
-    examples = [
-        ("🤖 AI Breakthroughs", "What are the latest AI breakthroughs in December 2024?"),
-        ("📈 Market Trends", "What are current global stock market trends?"),
-        ("🌍 Climate Updates", "What are recent developments in climate change research?"),
-        ("🚀 Space News", "What are the latest space exploration achievements?"),
-        ("💊 Medical Research", "What are recent breakthroughs in cancer research?"),
-        ("⚡ Tech Innovations", "What are the latest technological innovations?")
-    ]
-    
-    for i, (label, example_query) in enumerate(examples):
-        col = [col1, col2, col3][i % 3]
-        with col:
-            if st.button(label, use_container_width=True, key=f"example_{i}"):
-                query = example_query
-                st.rerun()
+# Clear selected query after use
+if st.session_state.get('selected_query'):
+    st.session_state.selected_query = ''
 
-st.markdown("<br>", unsafe_allow_html=True)
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    run_button = st.button("🚀 Start Research", use_container_width=True)
 
-run_button = st.button("🚀 Start Research", use_container_width=True, type="primary")
-
-# --- EXECUTION LOGIC ---
-if run_button and query and groq_key and tavily_key:
-    
-    with st.spinner("🔄 Initializing AI Research System..."):
-        time.sleep(0.5)  # Brief pause for effect
-        app = get_graph(groq_key, tavily_key, model, temperature, max_results)
+if run_button and query:
+    try:
+        # Initialize graph
+        app = get_graph(groq_key, tavily_key)
         
+        # Show loading animation
+        st.markdown('<div class="loading-bar"></div>', unsafe_allow_html=True)
+        
+        # Initial State
         initial_input = {
             "query": query,
             "needs_search": False,
             "search_results": "",
             "final_answer": "",
-            "steps": [],
-            "sources": []
+            "steps": []
         }
         
-        start_time = datetime.now()
-        result = app.invoke(initial_input)
-        end_time = datetime.now()
-        duration = (end_time - start_time).total_seconds()
-    
-    # Metrics Display
-    st.markdown('<div class="section-header">📊 Research Metrics</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown(f"""
-        <div class="metric-box">
-            <div class="metric-value">{len(result['steps'])}</div>
-            <div class="metric-label">Steps Executed</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"""
-        <div class="metric-box">
-            <div class="metric-value">{len(result.get('sources', []))}</div>
-            <div class="metric-label">Sources Found</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown(f"""
-        <div class="metric-box">
-            <div class="metric-value">{duration:.2f}s</div>
-            <div class="metric-label">Processing Time</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Execution Steps
-    st.markdown('<div class="section-header">🔄 Execution Timeline</div>', unsafe_allow_html=True)
-    
-    for step in result["steps"]:
-        if "|" in step:
-            emoji, step_type, message = step.split("|", 2)
-            st.markdown(f"""
-            <div class="step-item">
-                <div class="step-icon step-{step_type}">{emoji}</div>
-                <div class="step-content">{message}</div>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # Final Answer
-    st.markdown('<div class="section-header">📝 Research Results</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="answer-box">{result["final_answer"]}</div>', unsafe_allow_html=True)
-    
-    # Sources
-    if result.get("sources"):
-        st.markdown('<div class="section-header">🔗 Sources</div>', unsafe_allow_html=True)
+        # Execute with progress updates
+        with st.spinner("🤖 Agent analyzing your query..."):
+            result = app.invoke(initial_input)
         
-        for idx, source in enumerate(result["sources"], 1):
-            st.markdown(f"""
-            <div class="source-card">
-                <div class="source-title">📄 {idx}. {source.get('title', 'Untitled')}</div>
-                <a href="{source['url']}" target="_blank" class="source-link">
-                    🔗 {source['url'][:60]}...
-                </a>
-            </div>
-            """, unsafe_allow_html=True)
+        # Display pipeline steps
+        st.markdown('<div class="pipeline-container">', unsafe_allow_html=True)
+        st.markdown('<h3 class="pipeline-header">🔄 Research Pipeline</h3>', unsafe_allow_html=True)
+        
+        for i, step in enumerate(result["steps"]):
+            time.sleep(0.2)  # Slight delay for visual effect
+            st.markdown(f'<div class="step-card">{step}</div>', unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Add to history
+        method = "Web Search" if result["needs_search"] else "Direct Answer"
+        st.session_state.search_history.append({
+            "query": query,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "method": method
+        })
+        
+        # Display Results
+        st.markdown("---")
+        st.markdown("### 📝 Research Results")
+        st.markdown(result["final_answer"])
+        
+        # Optional: Show raw sources if search was used
+        if result["search_results"]:
+            with st.expander("🔍 View Source Data"):
+                st.text(result["search_results"])
+        
+        # Success message
+        st.success("✅ Research completed successfully!")
     
-    # Raw Search Data
-    if result["search_results"]:
-        with st.expander("🔍 View Raw Search Data"):
-            st.code(result["search_results"], language="text")
+    except Exception as e:
+        st.error(f"❌ **Error during research:** {str(e)}")
+        
+        if "401" in str(e) or "Invalid API Key" in str(e):
+            st.error("🔑 **API Key Error!** Your API key is invalid or expired.")
+            st.info("Please check:\n1. Your .env file has the correct API keys\n2. Keys have no extra spaces or quotes\n3. Keys are active and not expired")
+        elif "429" in str(e):
+            st.error("⏱️ **Rate Limit!** Too many requests. Please wait a moment.")
+        else:
+            st.error("Please check your API keys and try again.")
+            with st.expander("🐛 View Error Details"):
+                st.code(str(e))
 
 elif run_button and not query:
-    st.warning("⚠️ Please enter a research query above.")
+    st.warning("⚠️ Please enter a research query to begin.")
 
-elif run_button and (not groq_key or not tavily_key):
-    st.error("🚫 Please provide API keys in the sidebar or .env file.")
-
-# --- FOOTER ---
-st.markdown("<br><br>", unsafe_allow_html=True)
+# --- 9. FOOTER ---
+st.markdown("---")
 st.markdown("""
-<div style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 2rem 0; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-    <p style="font-size: 1rem; margin-bottom: 0.5rem;">Built with ❤️ using Streamlit, LangGraph & Llama 3.3</p>
-    <p style="font-size: 0.9rem;">⚡ Intelligent Routing • 🌐 Real-time Search • 🤖 Advanced AI Reasoning</p>
+<div style="text-align: center; color: #666; padding: 2rem;">
+    <p>Built with ❤️ using LangGraph, Groq & Tavily</p>
+    <p style="font-size: 0.9rem;">Multi-Agent Architecture | Real-time Web Search | LLM-Powered Synthesis</p>
 </div>
 """, unsafe_allow_html=True)
