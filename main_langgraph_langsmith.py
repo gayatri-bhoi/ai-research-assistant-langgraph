@@ -4,11 +4,10 @@ from typing import TypedDict, Annotated
 import operator
 from dotenv import load_dotenv
 import time
-import json
 from datetime import datetime
 
-# LangGraph & LangChain imports
-from langgraph.graph import StateGraph, END
+# LangGraph & LangChain imports - Updated for v0.2+
+from langgraph.graph import StateGraph, END, START
 from langchain_groq import ChatGroq
 from tavily import TavilyClient
 
@@ -18,7 +17,7 @@ load_dotenv()
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
     page_title="AI Research Assistant",
-    page_icon="🔍",
+    page_icon="🔎",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -85,66 +84,6 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
-    .history-item {
-        background: #f8f9fa;
-        padding: 0.8rem;
-        border-radius: 8px;
-        margin: 0.5rem 0;
-        border-left: 3px solid #667eea;
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
-    
-    .history-item:hover {
-        background: #e9ecef;
-        transform: translateX(5px);
-    }
-    
-    .history-time {
-        font-size: 0.8rem;
-        color: #6c757d;
-    }
-    
-    /* Input container */
-    .input-container {
-        animation: fadeIn 1.2s ease-out;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2.5rem;
-        border-radius: 15px;
-        box-shadow: 0 8px 30px rgba(102, 126, 234, 0.3);
-        margin: 2rem 0;
-    }
-    
-    /* Enhanced search input */
-    .stTextInput > div > div > input {
-        background: white !important;
-        border: 2px solid rgba(255,255,255,0.3) !important;
-        border-radius: 12px !important;
-        padding: 1rem 1.5rem !important;
-        font-size: 1.1rem !important;
-        color: #2c3e50 !important;
-        caret-color: #667eea !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    .stTextInput > div > div > input:focus {
-        border: 2px solid white !important;
-        box-shadow: 0 0 20px rgba(255,255,255,0.5) !important;
-        transform: scale(1.02);
-        caret-color: #667eea !important;
-    }
-    
-    .stTextInput > div > div > input::placeholder {
-        color: #95a5a6 !important;
-    }
-    
-    .stTextInput > label {
-        color: white !important;
-        font-size: 1.2rem !important;
-        font-weight: 600 !important;
-        margin-bottom: 0.5rem !important;
-    }
-    
     /* Step cards */
     .step-card {
         animation: slideIn 0.5s ease-out;
@@ -175,26 +114,6 @@ st.markdown("""
         color: #2c3e50;
         font-weight: 600;
         margin-bottom: 1rem;
-    }
-    
-    /* Answer container */
-    .answer-container {
-        animation: fadeIn 1.5s ease-out;
-        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-        padding: 2rem;
-        border-radius: 15px;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        border: 2px solid #667eea;
-        margin-top: 2rem;
-    }
-    
-    .answer-container h3 {
-        color: #2c3e50;
-    }
-    
-    .answer-container p {
-        color: #34495e;
-        line-height: 1.8;
     }
     
     /* Loading animation */
@@ -234,24 +153,6 @@ st.markdown("""
     .stButton > button:hover {
         transform: translateY(-2px);
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-        animation: pulse 1s infinite;
-    }
-    
-    /* Status indicators */
-    .status-working {
-        display: inline-block;
-        animation: pulse 1.5s infinite;
-    }
-    
-    /* Emoji animations */
-    .emoji-bounce {
-        display: inline-block;
-        animation: bounce 1s infinite;
-    }
-    
-    @keyframes bounce {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-10px); }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -274,7 +175,7 @@ with st.sidebar:
         st.rerun()
     
     # Delete history button
-    if st.button("📝 Delete History", use_container_width=True):
+    if st.button("🔥 Delete History", use_container_width=True):
         st.session_state.search_history = []
         st.success("✅ History deleted successfully!")
         time.sleep(1)
@@ -289,7 +190,7 @@ with st.sidebar:
         st.markdown(f"**Total Searches:** {len(st.session_state.search_history)}")
         
         # Display history items
-        for idx, item in enumerate(reversed(st.session_state.search_history[-10:])):  # Show last 10
+        for idx, item in enumerate(reversed(st.session_state.search_history[-10:])):
             with st.expander(f"🔍 {item['query'][:40]}...", expanded=False):
                 st.markdown(f"**Time:** {item['timestamp']}")
                 st.markdown(f"**Method:** {item['method']}")
@@ -309,9 +210,9 @@ with st.sidebar:
         
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("🌐 Web Searches", search_count)
+            st.metric("🌐 Searches", search_count)
         with col2:
-            st.metric("💡 Direct Answers", direct_count)
+            st.metric("💡 Direct", direct_count)
     
     st.markdown("---")
     
@@ -325,7 +226,6 @@ with st.sidebar:
         - Real-time web search
         - LLM-powered synthesis
         - Search history tracking
-        - Cache management
         
         Built with LangGraph, Groq & Tavily
         """)
@@ -333,7 +233,7 @@ with st.sidebar:
 # --- 5. HEADER ---
 st.markdown("""
 <div class="main-header">
-    <h1>🔍 AI Research Assistant</h1>
+    <h1>🔎 AI Research Assistant</h1>
     <p>Powered by LangGraph & Tavily | Multi-Agent Intelligence</p>
 </div>
 """, unsafe_allow_html=True)
@@ -355,10 +255,10 @@ def load_api_keys():
 def verify_groq_key(api_key):
     """Test if Groq API key is valid"""
     try:
-        test_llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=api_key, timeout=10)
+        test_llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=api_key, timeout=10)
         test_llm.invoke("test")
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 def verify_tavily_key(api_key):
@@ -367,7 +267,7 @@ def verify_tavily_key(api_key):
         test_client = TavilyClient(api_key=api_key)
         test_client.search(query="test", max_results=1)
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 groq_key, tavily_key, langchain_key = load_api_keys()
@@ -387,7 +287,7 @@ if tavily_key:
 # Display configuration status
 col1, col2, col3 = st.columns(3)
 with col1:
-    status = "✅ Valid & Connected" if groq_valid else ("⚠️ Invalid Key" if groq_key else "❌ Key Missing")
+    status = "✅ Valid" if groq_valid else ("⚠️ Invalid" if groq_key else "❌ Missing")
     color = "#28a745" if groq_valid else ("#ffc107" if groq_key else "#dc3545")
     st.markdown(f"""
     <div class="info-card" style="border-left-color: {color}">
@@ -397,7 +297,7 @@ with col1:
     """, unsafe_allow_html=True)
     
 with col2:
-    status = "✅ Valid & Connected" if tavily_valid else ("⚠️ Invalid Key" if tavily_key else "❌ Key Missing")
+    status = "✅ Valid" if tavily_valid else ("⚠️ Invalid" if tavily_key else "❌ Missing")
     color = "#28a745" if tavily_valid else ("#ffc107" if tavily_key else "#dc3545")
     st.markdown(f"""
     <div class="info-card" style="border-left-color: {color}">
@@ -411,33 +311,30 @@ with col3:
     color = "#28a745" if langchain_key else "#6c757d"
     st.markdown(f"""
     <div class="info-card" style="border-left-color: {color}">
-        <h4>📊 Tracing Status</h4>
+        <h4>📊 Tracing</h4>
         <p>{status}</p>
     </div>
     """, unsafe_allow_html=True)
 
 # Show detailed error messages
 if not groq_key or not tavily_key:
-    st.error("⚠️ **Missing API Keys!** Please configure your .env file")
+    st.error("⚠️ **Missing API Keys!** Configure Streamlit Secrets")
+    st.info("📌 Add your keys in Streamlit Cloud:\nSettings → Secrets → Add the following:")
     st.code("""
-GROQ_API_KEY=your_actual_groq_key_here
-TAVILY_API_KEY=your_actual_tavily_key_here
-LANGCHAIN_API_KEY=your_langchain_key_here (optional)
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-LANGCHAIN_PROJECT=research-assistance-project
+GROQ_API_KEY = "your_groq_key_here"
+TAVILY_API_KEY = "your_tavily_key_here"
     """)
-    st.info("📌 Get your API keys from:\n- Groq: https://console.groq.com/keys\n- Tavily: https://app.tavily.com/")
+    st.info("🔑 Get API keys:\n- Groq: https://console.groq.com/keys\n- Tavily: https://app.tavily.com/")
     st.stop()
 
 if groq_key and not groq_valid:
-    st.error("❌ **Invalid Groq API Key!** Please check your GROQ_API_KEY in .env file")
-    st.info("🔑 Get a valid API key from: https://console.groq.com/keys")
+    st.error("❌ **Invalid Groq API Key!**")
+    st.info("🔑 Get a valid key from: https://console.groq.com/keys")
     st.stop()
 
 if tavily_key and not tavily_valid:
-    st.error("❌ **Invalid Tavily API Key!** Please check your TAVILY_API_KEY in .env file")
-    st.info("🔑 Get a valid API key from: https://app.tavily.com/")
+    st.error("❌ **Invalid Tavily API Key!**")
+    st.info("🔑 Get a valid key from: https://app.tavily.com/")
     st.stop()
 
 # --- 7. CORE LOGIC (Nodes & Graph) ---
@@ -450,41 +347,89 @@ class ResearchState(TypedDict):
 
 @st.cache_resource
 def get_graph(_groq_api_key, _tavily_api_key):
-    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.3, groq_api_key=_groq_api_key)
+    """Build and compile the research graph"""
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile", 
+        temperature=0.3, 
+        api_key=_groq_api_key
+    )
     tavily_client = TavilyClient(api_key=_tavily_api_key)
 
     def analyze_query(state: ResearchState):
-        prompt = f"Analyze if this query needs web search or direct answer: {state['query']}\nRespond 'SEARCH' or 'DIRECT'."
+        """Determine if query needs web search"""
+        prompt = f"Analyze if this query needs web search or can be answered directly: {state['query']}\nRespond with only 'SEARCH' or 'DIRECT'."
         response = llm.invoke(prompt)
         needs_search = "SEARCH" in response.content.upper()
-        return {"needs_search": needs_search, "steps": [f"🧠 Decision: {'Web Search Required' if needs_search else 'Direct Knowledge Available'}"]}
+        decision = "Web Search Required" if needs_search else "Direct Knowledge Available"
+        return {
+            "needs_search": needs_search, 
+            "steps": [f"🧠 Decision: {decision}"]
+        }
 
     def search_web(state: ResearchState):
-        search_response = tavily_client.search(query=state["query"], max_results=3)
-        results = "\n\n".join([f"Source: {r['url']}\n{r['content']}" for r in search_response['results']])
-        return {"search_results": results, "steps": [f"🌐 Retrieved {len(search_response['results'])} sources from Tavily"]}
+        """Search the web using Tavily"""
+        search_response = tavily_client.search(
+            query=state["query"], 
+            max_results=3
+        )
+        results = "\n\n".join([
+            f"Source: {r['url']}\n{r['content']}" 
+            for r in search_response['results']
+        ])
+        return {
+            "search_results": results, 
+            "steps": [f"🌐 Retrieved {len(search_response['results'])} sources"]
+        }
 
     def synthesize_answer(state: ResearchState):
-        prompt = f"Using these results: {state['search_results']}\n\nAnswer the query: {state['query']}"
+        """Synthesize answer from search results"""
+        prompt = f"""Using these search results:
+{state['search_results']}
+
+Answer this query comprehensively: {state['query']}
+
+Provide a clear, well-structured answer."""
         response = llm.invoke(prompt)
-        return {"final_answer": response.content, "steps": ["✍️ Synthesized comprehensive research report"]}
+        return {
+            "final_answer": response.content, 
+            "steps": ["✏️ Synthesized research report"]
+        }
 
     def direct_answer(state: ResearchState):
-        response = llm.invoke(f"Answer concisely: {state['query']}")
-        return {"final_answer": response.content, "steps": ["💡 Generated answer from internal knowledge base"]}
+        """Answer directly without search"""
+        response = llm.invoke(f"Answer this query clearly and concisely: {state['query']}")
+        return {
+            "final_answer": response.content, 
+            "steps": ["💡 Generated answer from knowledge base"]
+        }
 
     def route_query(state: ResearchState):
+        """Route to search or direct answer"""
         return "search" if state["needs_search"] else "direct"
 
-    # Build Graph
+    # Build Graph using modern LangGraph v0.2+ syntax
     workflow = StateGraph(ResearchState)
+    
+    # Add nodes
     workflow.add_node("analyze", analyze_query)
     workflow.add_node("search", search_web)
     workflow.add_node("synthesize", synthesize_answer)
     workflow.add_node("direct", direct_answer)
     
-    workflow.set_entry_point("analyze")
-    workflow.add_conditional_edges("analyze", route_query, {"search": "search", "direct": "direct"})
+    # Set entry point
+    workflow.add_edge(START, "analyze")
+    
+    # Add conditional routing
+    workflow.add_conditional_edges(
+        "analyze", 
+        route_query, 
+        {
+            "search": "search", 
+            "direct": "direct"
+        }
+    )
+    
+    # Add edges to END
     workflow.add_edge("search", "synthesize")
     workflow.add_edge("synthesize", END)
     workflow.add_edge("direct", END)
@@ -532,8 +477,8 @@ if run_button and query:
         st.markdown('<div class="pipeline-container">', unsafe_allow_html=True)
         st.markdown('<h3 class="pipeline-header">🔄 Research Pipeline</h3>', unsafe_allow_html=True)
         
-        for i, step in enumerate(result["steps"]):
-            time.sleep(0.2)  # Slight delay for visual effect
+        for step in result["steps"]:
+            time.sleep(0.2)
             st.markdown(f'<div class="step-card">{step}</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -553,7 +498,7 @@ if run_button and query:
         
         # Optional: Show raw sources if search was used
         if result["search_results"]:
-            with st.expander("🔍 View Source Data"):
+            with st.expander("📚 View Source Data"):
                 st.text(result["search_results"])
         
         # Success message
@@ -564,12 +509,10 @@ if run_button and query:
         
         if "401" in str(e) or "Invalid API Key" in str(e):
             st.error("🔑 **API Key Error!** Your API key is invalid or expired.")
-            st.info("Please check:\n1. Your .env file has the correct API keys\n2. Keys have no extra spaces or quotes\n3. Keys are active and not expired")
         elif "429" in str(e):
-            st.error("⏱️ **Rate Limit!** Too many requests. Please wait a moment.")
+            st.error("⏱️ **Rate Limit!** Too many requests. Please wait.")
         else:
-            st.error("Please check your API keys and try again.")
-            with st.expander("🐛 View Error Details"):
+            with st.expander("🛠 View Error Details"):
                 st.code(str(e))
 
 elif run_button and not query:
